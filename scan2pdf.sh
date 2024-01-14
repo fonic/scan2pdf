@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
 
-# -------------------------------------------------------------------------
-#                                                                         -
-#  Scan to PDF (scan2pdf)                                                 -
-#                                                                         -
-#  Created by Fonic <https://github.com/fonic>                            -
-#  Date: 04/17/21 - 09/16/23                                              -
-#                                                                         -
-#  Based on:                                                              -
-#  https://gist.github.com/mludvig/936678                                 -
-#                                                                         -
-# -------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+#                                                                              -
+#  Scan to PDF (scan2pdf)                                                      -
+#                                                                              -
+#  Created by Fonic <https://github.com/fonic>                                 -
+#  Date: 04/17/21 - 01/14/24                                                   -
+#                                                                              -
+#  Inspired by:                                                                -
+#  https://gist.github.com/mludvig/936678                                      -
+#                                                                              -
+# ------------------------------------------------------------------------------
 
 # --------------------------------------
 #                                      -
@@ -33,11 +33,11 @@ fi
 # --------------------------------------
 
 # Script information
-SCRIPT_FILE="$(basename "$0")"
-SCRIPT_PATH="$(realpath "$0")"
+SCRIPT_FILE="$(basename -- "$0")"
+SCRIPT_PATH="$(realpath -- "$0")"
 SCRIPT_CONF="${SCRIPT_PATH%.*}.conf"
 SCRIPT_TITLE="Scan to PDF (scan2pdf)"
-SCRIPT_VERSION="2.1 (09/16/23)"
+SCRIPT_VERSION="2.3 (01/14/24)"
 
 # Usage information
 # NOTE:
@@ -56,14 +56,23 @@ Scan documents directly to PDF file.
                             %{SCAN_RESOLUTIONS}
   -s, --source STRING       Scan source ['\${SOURCE_DEFAULT}']
                             %{SCAN_SOURCES}
+
   -b, --brightness VALUE    Brightness in percent (\${BRIGHTNESS_MIN}..\${BRIGHTNESS_MAX}) [\${BRIGHTNESS_DEFAULT}]
                             (only applied if supported by color mode)
   -c, --contrast VALUE      Contrast in percent (\${CONTRAST_MIN}..\${CONTRAST_MAX}) [\${CONTRAST_DEFAULT}]
                             (only applied if supported by color mode)
+
   -l, --topleftx VALUE      Top left x offset of scan area in mm (\${TOPLEFTX_MIN}..\${TOPLEFTX_MAX}) [\${TOPLEFTX_DEFAULT}]
   -t, --toplefty VALUE      Top left y offset of scan area in mm (\${TOPLEFTY_MIN}..\${TOPLEFTY_MAX}) [\${TOPLEFTY_DEFAULT}]
   -x, --width VALUE         Width of scan area in mm (\${WIDTH_MIN}..\${WIDTH_MAX}) [\${WIDTH_DEFAULT}]
   -y, --height VALUE        Height of scan area in mm (\${HEIGHT_MIN}..\${HEIGHT_MAX}) [\${HEIGHT_DEFAULT}]
+
+  -a, --batch-scan          Scan multiple documents, prompt in between documents
+                            (option '-o/--outfile-template' becomes mandatory)
+  -o, --outfile-pattern     Interpret OUTFILE argument as printf-style pattern,
+                            determine next available output file by incrementing
+                            integer component (e.g. '~/Documents/Scan_%05d.pdf')
+
   -k, --keep-temp           Keep temporary directory on exit
   -h, --help                Print usage information
 
@@ -74,10 +83,15 @@ Strings/values in square brackets show current defaults."
 # dynamically generated contents, i.e. when replacing '%{...}' tokens)
 USAGE_INDENT=28
 
+# Upper limit for index used to determine next available output file based
+# on output file pattern (100k documents in one folder should be more than
+# enough)
+MAX_INDEX=99999
+
 
 # --------------------------------------
 #                                      -
-#  Configuration                       -
+#  Default Configuration               -
 #                                      -
 # --------------------------------------
 
@@ -86,6 +100,7 @@ USAGE_INDENT=28
 # on supported parameters and/or valid values for scan-related settings
 
 # Default scanner device (string)
+#DEVICE_DEFAULT="brother3:net1;dev0"
 DEVICE_DEFAULT="brother4:net1;dev0"
 
 # Supported color modes (array of strings), default color mode (string)
@@ -142,13 +157,14 @@ TOPLEFTY_MAX=356
 TOPLEFTY_DEFAULT=0
 WIDTH_MIN=0
 WIDTH_MAX=216
-#WIDTH_DEFAULT=210              # DIN A4 (210.0 mm / 8.3 in)
-WIDTH_DEFAULT=216               # Letter/Legal (215.9 mm / 8.5 in)
 HEIGHT_MIN=0
 HEIGHT_MAX=356
+#WIDTH_DEFAULT=210              # DIN A4 (210.0 mm /  8.3 in)
 #HEIGHT_DEFAULT=297             # DIN A4 (297.0 mm / 11.7 in)
-#HEIGHT_DEFAULT=356             # Legal (355.6 mm / 14.0 in)
-HEIGHT_DEFAULT=280              # Letter (279.4 mm / 11.0 in)
+#WIDTH_DEFAULT=216              # Legal  (215.9 mm /  8.5 in)
+#HEIGHT_DEFAULT=356             # Legal  (355.6 mm / 14.0 in)
+WIDTH_DEFAULT=216               # Letter (215.9 mm /  8.5 in)
+HEIGHT_DEFAULT=279              # Letter (279.4 mm / 11.0 in)
 
 # Options passed to 'scanimage' (array of strings)
 #SCANIMAGE_OPTS=("--progress" "--verbose")  # display scan progress, use verbose output
@@ -161,8 +177,27 @@ TIFFCP_OPTS=("-c" "lzw")        # use LZW compression (fast)
 #TIFF2PDF_OPTS=("-z")           # use ZIP compression (lossless, higher quality, bigger PDF file)
 TIFF2PDF_OPTS=("-j" "-q" "95")  # use JPEG compression (quality 95) (lossy, lower quality, smaller PDF file)
 
+# Options passed to 'convert' (array of strings)
+# NOTE:
+# 'convert' is only used if 'tiff2pdf' is not available
+# 'convert' uses separate options for INPUT and OUTPUT
+CONVERT_INPUT_OPTS=()           # none
+CONVERT_OUTPUT_OPTS=()          # none
+
+# Scan multiple documents, prompt user in between documents by default
+# (string, 'yes'/'no')
+BATCH_SCAN_DEFAULT="no"
+
+# Interpret OUTFILE command line argument as printf-style pattern and de-
+# termine next output file automatically by incrementing integer component
+# of pattern by default (string, 'yes'/'no')
+# Example:
+# Pattern '~/Documents/Scan_%05d.pdf' -> '~/Documents/Scan_00001.pdf',
+# '~/Documents/Scan_00002.pdf', '~/Documents/Scan_00003.pdf', ...
+OUTFILE_PATTERN_DEFAULT="no"
+
 # Keep temporary directory on exit by default (string, 'yes'/'no')
-KEEPTEMP_DEFAULT="no"
+KEEP_TEMP_DEFAULT="no"
 
 
 # --------------------------------------
@@ -286,7 +321,7 @@ function is_integer() {
 set -ueE; trap "printe \"Error: an unhandled error occurred on line \${LINENO}, aborting\"; exit 1" ERR
 
 # Set up trap to handle CTRL+C/SIGINT
-trap "set +e; trap - ERR; echo -en \"\r\e[2K\"; printw \"Aborting per user request (CTRL+C/SIGINT)\"; exit 130" INT
+trap "set +e; trap - ERR; echo -en \"\r\e[2K\"; printn; printw \"Aborting per user request (CTRL+C/SIGINT).\"; exit 130" INT
 
 # Source configuration
 if ! source "${SCRIPT_CONF}"; then
@@ -325,7 +360,7 @@ printn
 trap "printn" EXIT
 
 # Initialize settings with defaults
-for item in device mode resolution source brightness contrast topleftx toplefty width height keeptemp; do
+for item in device mode resolution source brightness contrast topleftx toplefty width height outfile_pattern batch_scan keep_temp; do
 	declare -n setvar="${item}"
 	declare -n defvar="${item^^}_DEFAULT"
 	setvar="${defvar}"
@@ -375,8 +410,14 @@ while getopt option; do
 			getarg height || { printe "Error: option '${option}' requires an argument"; result=1; continue; }
 			is_integer "${height}" ${HEIGHT_MIN} ${HEIGHT_MAX} || { printe "Error: invalid height value '${height}'"; result=1; continue; }
 			;;
+		-a|--batch-scan)
+			batch_scan="yes"
+			;;
+		-o|--outfile-pattern)
+			outfile_pattern="yes"
+			;;
 		-k|--keep-temp)
-			keeptemp="yes"
+			keep_temp="yes"
 			;;
 		-h|--help)
 			# already handled above
@@ -391,18 +432,31 @@ while getopt option; do
 			;;
 	esac
 done
-[[ -n "${outfile+set}" ]] || { printe "Error: no output file specified"; result=1; }
+[[ "${batch_scan}" == "yes" && "${outfile_pattern}" != "yes" ]] && { printe "Error: option '-a/--batch-scan' requires option '-o/--outfile-pattern'"; result=1; }
+if [[ "${outfile_pattern}" == "yes" ]]; then
+	if [[ -n "${outfile+set}" ]]; then
+		[[ "${outfile}" =~ %[0-9]*d ]] || { printe "Error: invalid output file pattern '${outfile}' (integer token missing)"; result=1; }
+	else
+		 printe "Error: no output file pattern specified"; result=1
+	fi
+else
+	if [[ -n "${outfile+set}" ]]; then
+		[[ -e "${outfile}" ]] && { printe "Error: output file '${outfile}' already exists"; result=1; }
+	else
+		 printe "Error: no output file specified"; result=1
+	fi
+fi
 (( ${result} == 0 )) || { printe "Error: invalid command line, use '--help' to display usage information"; exit 2; }
 
 # Check command availability
 result=0
-for cmd in scanimage tiffcp tiff2pdf; do
-	is_cmd_avail "${cmd}" || { printe "Error: command '${cmd}' is not available"; result=1; }
-done
+is_cmd_avail "scanimage" || { printe "Error: command 'scanimage' is not available"; result=1; }
+is_cmd_avail "tiffcp" || { printe "Error: command 'tiffcp' is not available"; result=1; }
+is_cmd_avail "tiff2pdf" || is_cmd_avail "convert" || { printe "Error: neither command 'tiff2pdf' nor 'convert' is available"; result=1; }
 (( ${result} == 0 )) || { printe "Error: missing required command(s), check dependencies"; exit 1; }
 
-# Print scan settings
-printh "Scan settings:"
+# Print scan parameters
+printh "Scan parameters:"
 printn "Device:      ${device}"
 printn "Mode:        ${mode}"
 printn "Resolution:  ${resolution} dpi"
@@ -413,55 +467,103 @@ printn "Top left x:  ${topleftx} mm"
 printn "Top left y:  ${toplefty} mm"
 printn "Width:       ${width} mm"
 printn "Height:      ${height} mm"
-printn "Keep temp:   ${keeptemp}"
-printn "Output file: ${outfile}"
+printn "Keep temp:   ${keep_temp}"
+[[ "${outfile_pattern}" != "yes" ]] && printn "Output file: ${outfile}"
+printn
 
 # Create temporary directory, set up exit trap for cleanup (replaces pre-
 # viously set up cosmetic exit trap)
 printh "Creating temporary directory..."
 tempdir="$(mktemp -d)" || { printe "Error: failed to create temporary directory, aborting"; exit 1; }
-trap "set +e; trap - ERR; if [[ \"${keeptemp}\" == \"yes\" ]]; then printw \"Keeping temporary directory '${tempdir}'\"; else rm -rf \"${tempdir}\"; fi; printn" EXIT
+trap "set +e; trap - ERR; if [[ \"${keep_temp}\" == \"yes\" ]]; then printn; printw \"Keeping temporary directory '${tempdir}'.\"; else rm -rf -- \"${tempdir}\"; fi; printn" EXIT
 printn "Path: ${tempdir}"
+printn
 
-# Scan pages (creates one TIFF file per page)
-# NOTE:
-# Using file name template 'page_%010d.tiff' ('page_0000000001.tiff', 'page_
-# 0000000002.tiff', etc.) to maintain correct page order when passing files
-# to 'tiffcp' using 'page_*.tiff' below
-printh "Scanning pages..."
-opts=()
-opts+=("--device-name=${device}")
-opts+=("--mode=${mode}")
-opts+=("--resolution=${resolution}")
-opts+=("--source=${source}")
-in_array "${mode}" BRIGHTNESS_MODES && opts+=("--brightness=${brightness}")
-in_array "${mode}" CONTRAST_MODES && opts+=("--contrast=${contrast}")
-opts+=("-l" "${topleftx}")
-opts+=("-t" "${toplefty}")
-opts+=("-x" "${width}")
-opts+=("-y" "${height}")
-opts+=("--format=tiff")
-opts+=("--batch=page_%010d.tiff")
-opts+=("${SCANIMAGE_OPTS[@]}")
-print_cmd "scanimage" "${opts[@]}"
-cd "${tempdir}" || { printe "Error: failed to change directory to '${tempdir}', aborting"; exit 1; }
-scanimage "${opts[@]}" || { printe "Error: call to 'scanimage' failed (exit code: $?), aborting"; exit 1; }
-cd - >/dev/null || :
+# Batch scan loop (only executed ONCE if not batch-scanning)
+result=0; index=0; pattern="${outfile}"
+while true; do
 
-# Merge pages (creates multipage TIFF file)
-printh "Merging pages..."
-opts=("${TIFFCP_OPTS[@]}")
-opts+=("${tempdir}"/page_*.tiff "${tempdir}/multipage.tiff")
-print_cmd "tiffcp" "${opts[@]}"
-tiffcp "${opts[@]}" || { printe "Error: call to 'tiffcp' failed (exit code: $?), aborting"; exit 1; }
+	# Determine next available output file based on output file pattern?
+	if [[ "${outfile_pattern}" == "yes" ]]; then
+		printh "Determining next output file..."
+		for ((index++; index <= ${MAX_INDEX}; index++)); do
+			printf -v outfile "${pattern}" "${index}"
+			[[ -e "${outfile}" ]] || break
+		done
+		if (( ${index} > ${MAX_INDEX} )) || [[ -e "${outfile}" ]]; then
+			printe "Error: failed to determine next output file (last candidate: ${outfile})"; result=1; break
+		fi
+		printn "Output file: ${outfile}"
+	fi
 
-# Create PDF file (from multipage TIFF file)
-printh "Creating PDF..."
-opts=("${TIFF2PDF_OPTS[@]}")
-opts+=("${tempdir}/multipage.tiff" "-o" "${outfile}")
-print_cmd "tiff2pdf" "${opts[@]}"
-tiff2pdf "${opts[@]}" || { printe "Error: call to 'tiff2pdf' failed (exit code: $?), aborting"; exit 1; }
+	# Determine file name of output file (without leading path and extension)
+	# NOTE:
+	# Used to name TIFF files in temporary directory to avoid name clashing
+	# while still having recognizable file names if user chooses to inspect
+	# contents (using option '-k/--keep-temp')
+	outfile_name="${outfile##*/}"; outfile_name="${outfile_name%.*}"
 
-# Return home safely
-printg "Success, all done."
-exit 0
+	# Scan pages (creates one TIFF file per page)
+	# NOTE:
+	# Using file name template '_page_%05d.tiff' ('_page_00001.tiff', '_page_
+	# 00002.tiff', etc.) to maintain correct page order when passing files to
+	# 'tiffcp' using '_page_*.tiff' below
+	printh "Scanning pages..."
+	opts=()
+	opts+=("--device-name=${device}")
+	opts+=("--mode=${mode}")
+	opts+=("--resolution=${resolution}")
+	opts+=("--source=${source}")
+	in_array "${mode}" BRIGHTNESS_MODES && opts+=("--brightness=${brightness}")
+	in_array "${mode}" CONTRAST_MODES && opts+=("--contrast=${contrast}")
+	opts+=("-l" "${topleftx}")
+	opts+=("-t" "${toplefty}")
+	opts+=("-x" "${width}")
+	opts+=("-y" "${height}")
+	opts+=("--format=tiff")
+	opts+=("--batch=${tempdir}/${outfile_name}_page_%05d.tiff")
+	opts+=("${SCANIMAGE_OPTS[@]}")
+	print_cmd "scanimage" "${opts[@]}"
+	scanimage "${opts[@]}" || { printe "Error: call to 'scanimage' failed (exit code: $?), aborting"; result=1; break; }
+
+	# Merge pages (creates multipage TIFF file)
+	printh "Merging pages..."
+	opts=()
+	opts+=("${TIFFCP_OPTS[@]}")
+	opts+=("--")
+	opts+=("${tempdir}/${outfile_name}_page_"*.tiff)
+	opts+=("${tempdir}/${outfile_name}_multipage.tiff")
+	print_cmd "tiffcp" "${opts[@]}"
+	tiffcp "${opts[@]}" || { printe "Error: call to 'tiffcp' failed (exit code: $?), aborting"; result=1; break; }
+
+	# Create PDF file (from multipage TIFF file)
+	printh "Creating PDF..."
+	if is_cmd_avail "tiff2pdf"; then
+		opts=()
+		opts+=("${TIFF2PDF_OPTS[@]}")
+		opts+=("-o" "${outfile}")
+		opts+=("--")
+		opts+=("${tempdir}/${outfile_name}_multipage.tiff")
+		print_cmd "tiff2pdf" "${opts[@]}"
+		tiff2pdf "${opts[@]}" || { printe "Error: call to 'tiff2pdf' failed (exit code: $?), aborting"; result=1; break; }
+	elif is_cmd_avail "convert"; then
+		opts=()
+		opts+=("${CONVERT_INPUT_OPTS[@]}")
+		opts+=("${tempdir}/${outfile_name}_multipage.tiff")
+		opts+=("${CONVERT_OUTPUT_OPTS[@]}")
+		opts+=("${outfile}")
+		print_cmd "convert" "${opts[@]}"
+		convert "${opts[@]}" || { printe "Error: call to 'convert' failed (exit code: $?), aborting"; result=1; break; }
+	fi
+
+	# Prompt user to continue batch scan with next document?
+	[[ "${batch_scan}" != "yes" ]] && break
+	printn
+	printw "Prepare next document and hit ENTER to continue -or- hit CTRL+D to exit."
+	read -s || break
+	printn
+
+done
+
+# Return result
+exit ${result}
