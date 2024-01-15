@@ -1,3 +1,17 @@
+## Changelog for release v2.4
+
+**Changes:**
+- Changed workflow to either use `scanimage`+`convert` (preferred) -or-
+  `scanimage`+`tiffcp`+`tiff2pdf` (fallback); `convert` is preferred as
+  `tiff2pdf` might get removed from _LibTIFF_ in the future (see https://
+  bugs.gentoo.org/914232)
+- Updated dependency requirements in `README.md` to reflect new workflow
+  (now, either _ImageMagick_ -or- _LibTIFF_ is required)
+- Added output options for `convert` equivalent to those currently used for
+  `tiff2pdf` (i.e. ZIP compression -or- JPEG compression, quality 95)
+- Added command options to `Scan settings/parameters` listing printed to
+  console
+
 ## Changelog for release v2.3
 
 **Changes:**
@@ -24,11 +38,13 @@
 
 ## Changelog for release v2.2
 
+Release has not been published (skipped ahead to release v2.3).
+
 **Changes:**
-- Added support for using `convert` (ImageMagick) instead of `tiff2pdf`
-  (LibTIFF) as the latter is no longer being built by default and will
-  probably be removed completely from from LibTIFF in the foreseable future
-  (see https://bugs.gentoo.org/914232)
+- Added support for using `convert` (part of ImageMagick) instead of
+  `tiff2pdf` (part of LibTIFF) as the latter is no longer being built by
+  default and will probably be removed completely from from LibTIFF in the
+  foreseeable future (see https://bugs.gentoo.org/914232)
 - Added empty lines within usage information group similar items (e.g.
   brightness + contrast, topleftx + toplefty + width + height, etc.)
 - If an output file is specified, abort if it already exists (instead of
@@ -51,4 +67,4 @@ Initial release (versions prior to v2.1 have not been published).
 
 ##
 
-_Last updated: 01/14/24_
+_Last updated: 01/15/24_

@@ -5,7 +5,7 @@
 #  Scan to PDF (scan2pdf)                                                      -
 #                                                                              -
 #  Created by Fonic <https://github.com/fonic>                                 -
-#  Date: 04/17/21 - 01/14/24                                                   -
+#  Date: 04/17/21 - 01/15/24                                                   -
 #                                                                              -
 #  Inspired by:                                                                -
 #  https://gist.github.com/mludvig/936678                                      -
@@ -37,7 +37,7 @@ SCRIPT_FILE="$(basename -- "$0")"
 SCRIPT_PATH="$(realpath -- "$0")"
 SCRIPT_CONF="${SCRIPT_PATH%.*}.conf"
 SCRIPT_TITLE="Scan to PDF (scan2pdf)"
-SCRIPT_VERSION="2.3 (01/14/24)"
+SCRIPT_VERSION="2.4 (01/15/24)"
 
 # Usage information
 # NOTE:
@@ -46,7 +46,7 @@ SCRIPT_VERSION="2.3 (01/14/24)"
 USAGE_INFO="\e[1mUsage:\e[0m \${SCRIPT_FILE} [OPTIONS] OUTFILE
 
 \e[1m\${SCRIPT_TITLE} v\${SCRIPT_VERSION}\e[0m
-Scan documents directly to PDF file.
+Scan documents directly to PDF files.
 
 \e[1mOptions:\e[0m
   -d, --device STRING       Scanner device ['\${DEVICE_DEFAULT}']
@@ -159,30 +159,31 @@ WIDTH_MIN=0
 WIDTH_MAX=216
 HEIGHT_MIN=0
 HEIGHT_MAX=356
-#WIDTH_DEFAULT=210              # DIN A4 (210.0 mm /  8.3 in)
-#HEIGHT_DEFAULT=297             # DIN A4 (297.0 mm / 11.7 in)
-#WIDTH_DEFAULT=216              # Legal  (215.9 mm /  8.5 in)
-#HEIGHT_DEFAULT=356             # Legal  (355.6 mm / 14.0 in)
-WIDTH_DEFAULT=216               # Letter (215.9 mm /  8.5 in)
-HEIGHT_DEFAULT=279              # Letter (279.4 mm / 11.0 in)
+#WIDTH_DEFAULT=210                                          # DIN A4 (210.0 mm /  8.3 in)
+#HEIGHT_DEFAULT=297                                         # DIN A4 (297.0 mm / 11.7 in)
+#WIDTH_DEFAULT=216                                          # Legal  (215.9 mm /  8.5 in)
+#HEIGHT_DEFAULT=356                                         # Legal  (355.6 mm / 14.0 in)
+WIDTH_DEFAULT=216                                           # Letter (215.9 mm /  8.5 in)
+HEIGHT_DEFAULT=279                                          # Letter (279.4 mm / 11.0 in)
 
 # Options passed to 'scanimage' (array of strings)
-#SCANIMAGE_OPTS=("--progress" "--verbose")  # display scan progress, use verbose output
-SCANIMAGE_OPTS=("--progress")   # display scan progress
-
-# Options passed to 'tiffcp' (array of strings)
-TIFFCP_OPTS=("-c" "lzw")        # use LZW compression (fast)
-
-# Options passed to 'tiff2pdf' (array of strings)
-#TIFF2PDF_OPTS=("-z")           # use ZIP compression (lossless, higher quality, bigger PDF file)
-TIFF2PDF_OPTS=("-j" "-q" "95")  # use JPEG compression (quality 95) (lossy, lower quality, smaller PDF file)
+#SCANIMAGE_OPTS=("--progress" "--verbose")                  # Display scan progress, produce verbose output
+SCANIMAGE_OPTS=("--progress")                               # Display scan progress
 
 # Options passed to 'convert' (array of strings)
-# NOTE:
-# 'convert' is only used if 'tiff2pdf' is not available
-# 'convert' uses separate options for INPUT and OUTPUT
-CONVERT_INPUT_OPTS=()           # none
-CONVERT_OUTPUT_OPTS=()          # none
+# NOTE: uses separate options for INPUT and OUTPUT
+CONVERT_INPUT_OPTS=()                                       # No input options
+#CONVERT_OUTPUT_OPTS=("-compress" "zip")                    # Use ZIP compression (lossless, higher quality, larger PDF file)
+CONVERT_OUTPUT_OPTS=("-compress" "jpeg" "-quality" "95")    # Use JPEG compression (quality 95) (lossy, lower quality, smaller PDF file)
+
+# Options passed to 'tiffcp' (array of strings)
+# NOTE: only used if 'convert' is not available
+TIFFCP_OPTS=("-c" "lzw")                                    # Use LZW compression (fast, lossless)
+
+# Options passed to 'tiff2pdf' (array of strings)
+# NOTE: only used if 'convert' is not available
+#TIFF2PDF_OPTS=("-z")                                       # Use ZIP compression (lossless, higher quality, larger PDF file)
+TIFF2PDF_OPTS=("-j" "-q" "95")                              # Use JPEG compression (quality 95) (lossy, lower quality, smaller PDF file)
 
 # Scan multiple documents, prompt user in between documents by default
 # (string, 'yes'/'no')
@@ -451,24 +452,40 @@ fi
 # Check command availability
 result=0
 is_cmd_avail "scanimage" || { printe "Error: command 'scanimage' is not available"; result=1; }
-is_cmd_avail "tiffcp" || { printe "Error: command 'tiffcp' is not available"; result=1; }
-is_cmd_avail "tiff2pdf" || is_cmd_avail "convert" || { printe "Error: neither command 'tiff2pdf' nor 'convert' is available"; result=1; }
+if ! is_cmd_avail "convert"; then
+	if ! is_cmd_avail "tiffcp" || ! is_cmd_avail "tiff2pdf"; then
+		printe "Error: neither command 'convert' nor 'tiffcp'/'tiff2pdf' is available"; result=1
+	fi
+fi
 (( ${result} == 0 )) || { printe "Error: missing required command(s), check dependencies"; exit 1; }
 
-# Print scan parameters
-printh "Scan parameters:"
-printn "Device:      ${device}"
-printn "Mode:        ${mode}"
-printn "Resolution:  ${resolution} dpi"
-printn "Source:      ${source}"
-in_array "${mode}" BRIGHTNESS_MODES && printn "Brightness:  ${brightness}%"
-in_array "${mode}" CONTRAST_MODES && printn "Contrast:    ${contrast}%"
-printn "Top left x:  ${topleftx} mm"
-printn "Top left y:  ${toplefty} mm"
-printn "Width:       ${width} mm"
-printn "Height:      ${height} mm"
-printn "Keep temp:   ${keep_temp}"
-[[ "${outfile_pattern}" != "yes" ]] && printn "Output file: ${outfile}"
+# Print scan settings/parameters
+printh "Scan settings/parameters:"
+printn "Scanner device:          ${device}"
+printn "Color mode:              ${mode}"
+printn "Scan resolution:         ${resolution} dpi"
+printn "Scan source:             ${source}"
+in_array "${mode}" BRIGHTNESS_MODES && printn "Brightness:              ${brightness}%"
+in_array "${mode}" CONTRAST_MODES && printn "Contrast:                ${contrast}%"
+printn "Area top left x:         ${topleftx} mm"
+printn "Area top left y:         ${toplefty} mm"
+printn "Area width:              ${width} mm"
+printn "Area height:             ${height} mm"
+printn "Scanimage options:       ${SCANIMAGE_OPTS[@]-"(none)"}"
+if is_cmd_avail "convert"; then
+	printn "Convert input options:   ${CONVERT_INPUT_OPTS[@]-"(none)"}"
+	printn "Convert output options:  ${CONVERT_OUTPUT_OPTS[@]-"(none)"}"
+else
+	printn "Tiffcp options:          ${TIFFCP_OPTS[@]-"(none)"}"
+	printn "Tiff2pdf options:        ${TIFF2PDF_OPTS[@]-"(none)"}"
+fi
+printn "Batch scan:              ${batch_scan}"
+if [[ "${outfile_pattern}" != "yes" ]]; then
+	printn "Output file:             ${outfile}"
+else
+	printn "Output file pattern:     ${outfile}"
+fi
+printn "Keep temp directory:     ${keep_temp}"
 printn
 
 # Create temporary directory, set up exit trap for cleanup (replaces pre-
@@ -526,19 +543,32 @@ while true; do
 	print_cmd "scanimage" "${opts[@]}"
 	scanimage "${opts[@]}" || { printe "Error: call to 'scanimage' failed (exit code: $?), aborting"; result=1; break; }
 
-	# Merge pages (creates multipage TIFF file)
-	printh "Merging pages..."
-	opts=()
-	opts+=("${TIFFCP_OPTS[@]}")
-	opts+=("--")
-	opts+=("${tempdir}/${outfile_name}_page_"*.tiff)
-	opts+=("${tempdir}/${outfile_name}_multipage.tiff")
-	print_cmd "tiffcp" "${opts[@]}"
-	tiffcp "${opts[@]}" || { printe "Error: call to 'tiffcp' failed (exit code: $?), aborting"; result=1; break; }
+	# Prefer using 'convert' (which is able to create PDF file directly from
+	# separate TIFF files), fall back to 'tiffcp'/'tiff2pdf' if not available
+	if is_cmd_avail "convert"; then
+		# Create PDF file (from separate TIFF files)
+		printh "Creating PDF..."
+		opts=()
+		opts+=("${CONVERT_INPUT_OPTS[@]}")
+		opts+=("${tempdir}/${outfile_name}_page_"*.tiff)
+		opts+=("${CONVERT_OUTPUT_OPTS[@]}")
+		opts+=("${outfile}")
+		print_cmd "convert" "${opts[@]}"
+		convert "${opts[@]}" || { printe "Error: call to 'convert' failed (exit code: $?), aborting"; result=1; break; }
+	else
+		# Merge pages (creates single multipage TIFF file from separate TIFF
+		# files)
+		printh "Merging pages..."
+		opts=()
+		opts+=("${TIFFCP_OPTS[@]}")
+		opts+=("--")
+		opts+=("${tempdir}/${outfile_name}_page_"*.tiff)
+		opts+=("${tempdir}/${outfile_name}_multipage.tiff")
+		print_cmd "tiffcp" "${opts[@]}"
+		tiffcp "${opts[@]}" || { printe "Error: call to 'tiffcp' failed (exit code: $?), aborting"; result=1; break; }
 
-	# Create PDF file (from multipage TIFF file)
-	printh "Creating PDF..."
-	if is_cmd_avail "tiff2pdf"; then
+		# Create PDF file (from multipage TIFF file)
+		printh "Creating PDF..."
 		opts=()
 		opts+=("${TIFF2PDF_OPTS[@]}")
 		opts+=("-o" "${outfile}")
@@ -546,14 +576,6 @@ while true; do
 		opts+=("${tempdir}/${outfile_name}_multipage.tiff")
 		print_cmd "tiff2pdf" "${opts[@]}"
 		tiff2pdf "${opts[@]}" || { printe "Error: call to 'tiff2pdf' failed (exit code: $?), aborting"; result=1; break; }
-	elif is_cmd_avail "convert"; then
-		opts=()
-		opts+=("${CONVERT_INPUT_OPTS[@]}")
-		opts+=("${tempdir}/${outfile_name}_multipage.tiff")
-		opts+=("${CONVERT_OUTPUT_OPTS[@]}")
-		opts+=("${outfile}")
-		print_cmd "convert" "${opts[@]}"
-		convert "${opts[@]}" || { printe "Error: call to 'convert' failed (exit code: $?), aborting"; result=1; break; }
 	fi
 
 	# Prompt user to continue batch scan with next document?

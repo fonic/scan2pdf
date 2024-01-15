@@ -13,17 +13,17 @@ help me achieve that goal and are highly appreciated.
 
 ## Requirements
 **Dependencies:**<br/>
-_Bash       (>=v4.0)_,
-_scanimage_ (part of [SANE](http://www.sane-project.org/)),
-_tiffcp_    (part of [LibTIFF](http://libtiff.maptools.org/)),
-_tiff2pdf_  (part of [LibTIFF](http://libtiff.maptools.org/))
+_Bash_              (&ge;v4.0),
+_scanimage_         (part of [SANE](http://www.sane-project.org/)),
+_convert_           (part of [ImageMagick](https://www.imagemagick.org/))
 -or-
-_convert_   (part of [ImageMagick](https://www.imagemagick.org/))
+_tiffcp_/_tiff2pdf_ (part of [LibTIFF](http://libtiff.maptools.org/))
 
 **Packages:**<br/>
-Ubuntu: _bash_, _sane-utils_, _libtiff-tools_, _imagemagick_<br/>
-Gentoo: _app-shells/bash_, _media-gfx/sane-backends_, _media-libs/tiff_,
-        _media-gfx/imagemagick_
+Ubuntu: _bash_, _sane-utils_, _imagemagick_ -or- _libtiff-tools_<br/>
+Gentoo: _app-shells/bash_, _media-gfx/sane-backends_, _media-gfx/imagemagick_
+         -or- _media-libs/tiff_
+
 
 ## Download & Installation
 Refer to the [releases](https://github.com/fonic/scan2pdf/releases) section
@@ -33,8 +33,8 @@ the downloaded archive to a folder of your choice.
 ## Configuration
 Open `scan2pdf.conf` in your favorite text editor and adjust the settings
 to your liking. Refer to embedded comments for details. Refer to
-[this section](#configuration-options) for a listing of all configuration
-options and current defaults.
+[this section](#configuration-options) for a listing of configuration options
+and current defaults.
 
 ## Quick Start
 To scan a single document to PDF file, use the following command:
@@ -47,14 +47,25 @@ To scan multiple documents to PDF files, use the following command:
 $ ./scan2pdf.sh -a -o document_%05d.pdf
 ```
 
+See [this section](#command-line-options) for a detailed list of command line
+options.
+
+## Contributing
+
+To date, _Scan to PDF (scan2pdf)_ has only been tested with _Brother_ printers.
+If you own a printer manufactured by _HP_, _Canon_, _Epson_ or some other
+well-established brand and would like to help with adding support, please
+create an [issue on GitHub](https://github.com/fonic/scan2pdf/issues) and
+provide the output of `scanimage --help`.
+
 ## Command Line Options
 
 Available command line options:
 ```
 Usage: scan2pdf.sh [OPTIONS] OUTFILE
 
-Scan to PDF (scan2pdf) v2.3 (01/14/24)
-Scan documents directly to PDF file.
+Scan to PDF (scan2pdf) v2.4 (01/15/24)
+Scan documents directly to PDF files.
 
 Options:
   -d, --device STRING       Scanner device ['brother4:net1;dev0']
@@ -107,7 +118,7 @@ Configuration options and current defaults:
 #  Scan to PDF (scan2pdf)                                                      -
 #                                                                              -
 #  Created by Fonic <https://github.com/fonic>                                 -
-#  Date: 04/17/21 - 01/14/24                                                   -
+#  Date: 04/17/21 - 01/15/24                                                   -
 #                                                                              -
 # ------------------------------------------------------------------------------
 
@@ -175,32 +186,33 @@ WIDTH_MIN=0
 WIDTH_MAX=216
 HEIGHT_MIN=0
 HEIGHT_MAX=356
-#WIDTH_DEFAULT=210              # DIN A4 (210.0 mm /  8.3 in)
-#HEIGHT_DEFAULT=297             # DIN A4 (297.0 mm / 11.7 in)
-#WIDTH_DEFAULT=216              # Legal  (215.9 mm /  8.5 in)
-#HEIGHT_DEFAULT=356             # Legal  (355.6 mm / 14.0 in)
-WIDTH_DEFAULT=216               # Letter (215.9 mm /  8.5 in)
-HEIGHT_DEFAULT=279              # Letter (279.4 mm / 11.0 in)
+#WIDTH_DEFAULT=210                                          # DIN A4 (210.0 mm /  8.3 in)
+#HEIGHT_DEFAULT=297                                         # DIN A4 (297.0 mm / 11.7 in)
+#WIDTH_DEFAULT=216                                          # Legal  (215.9 mm /  8.5 in)
+#HEIGHT_DEFAULT=356                                         # Legal  (355.6 mm / 14.0 in)
+WIDTH_DEFAULT=216                                           # Letter (215.9 mm /  8.5 in)
+HEIGHT_DEFAULT=279                                          # Letter (279.4 mm / 11.0 in)
 
 # Options passed to 'scanimage' (array of strings)
-#SCANIMAGE_OPTS=("--progress" "--verbose")  # display scan progress, use verbose output
-SCANIMAGE_OPTS=("--progress")   # display scan progress
-
-# Options passed to 'tiffcp' (array of strings)
-TIFFCP_OPTS=("-c" "lzw")        # use LZW compression (fast)
-
-# Options passed to 'tiff2pdf' (array of strings)
-#TIFF2PDF_OPTS=("-z")           # use ZIP compression (lossless, higher quality, bigger PDF file)
-TIFF2PDF_OPTS=("-j" "-q" "95")  # use JPEG compression (quality 95) (lossy, lower quality, smaller PDF file)
+#SCANIMAGE_OPTS=("--progress" "--verbose")                  # Display scan progress, produce verbose output
+SCANIMAGE_OPTS=("--progress")                               # Display scan progress
 
 # Options passed to 'convert' (array of strings)
-# NOTE:
-# 'convert' is only used if 'tiff2pdf' is not available
-# 'convert' uses separate options for INPUT and OUTPUT
-CONVERT_INPUT_OPTS=()           # none
-CONVERT_OUTPUT_OPTS=()          # none
+# NOTE: uses separate options for INPUT and OUTPUT
+CONVERT_INPUT_OPTS=()                                       # No input options
+#CONVERT_OUTPUT_OPTS=("-compress" "zip")                    # Use ZIP compression (lossless, higher quality, larger PDF file)
+CONVERT_OUTPUT_OPTS=("-compress" "jpeg" "-quality" "95")    # Use JPEG compression (quality 95) (lossy, lower quality, smaller PDF file)
+
+# Options passed to 'tiffcp' (array of strings)
+# NOTE: only used if 'convert' is not available
+TIFFCP_OPTS=("-c" "lzw")                                    # Use LZW compression (fast, lossless)
+
+# Options passed to 'tiff2pdf' (array of strings)
+# NOTE: only used if 'convert' is not available
+#TIFF2PDF_OPTS=("-z")                                       # Use ZIP compression (lossless, higher quality, larger PDF file)
+TIFF2PDF_OPTS=("-j" "-q" "95")                              # Use JPEG compression (quality 95) (lossy, lower quality, smaller PDF file)
 ```
 
 ##
 
-_Last updated: 01/14/24_
+_Last updated: 01/15/24_
