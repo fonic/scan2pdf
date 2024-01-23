@@ -2,6 +2,7 @@
 Scan documents directly to PDF files from the command line. Especially useful
 to batch-scan large volumes of documents.
 
+
 ## Donations
 I'm striving to become a full-time developer of [Free and open-source software
 (FOSS)](https://en.wikipedia.org/wiki/Free_and_open-source_software). Donations
@@ -10,6 +11,7 @@ help me achieve that goal and are highly appreciated.
 <a href="https://www.buymeacoffee.com/fonic"><img src="https://raw.githubusercontent.com/fonic/donate-buttons/main/buymeacoffee-button.png" alt="Buy Me A Coffee" height="35"></a>&nbsp;&nbsp;
 <a href="https://paypal.me/fonicmaxxim"><img src="https://raw.githubusercontent.com/fonic/donate-buttons/main/paypal-button.png" alt="Donate via PayPal" height="35"></a>&nbsp;&nbsp;
 <a href="https://ko-fi.com/fonic"><img src="https://raw.githubusercontent.com/fonic/donate-buttons/main/kofi-button.png" alt="Donate via Ko-fi" height="35"></a>
+
 
 ## Requirements
 **Dependencies:**<br/>
@@ -30,11 +32,19 @@ Refer to the [releases](https://github.com/fonic/scan2pdf/releases) section
 for downloads links. There is no actual installation required. Simply extract
 the downloaded archive to a folder of your choice.
 
+For [KDE](https://kde.org/) file managers
+[Konqueror](https://apps.kde.org/konqueror/) and
+[Dolphin](https://apps.kde.org/dolphin/), a
+[Service Menu](#service-menu) is included that allows for convenient one-click
+scanning to PDF file from within the context menu.
+
+
 ## Configuration
 Open `scan2pdf.conf` in your favorite text editor and adjust the settings
 to your liking. Refer to embedded comments for details. Refer to
 [this section](#configuration-options) for a listing of configuration options
 and current defaults.
+
 
 ## Quick Start
 To scan a single document to PDF file, use the following command:
@@ -50,13 +60,33 @@ $ ./scan2pdf.sh -a -o document_%05d.pdf
 See [this section](#command-line-options) for a detailed list of command line
 options.
 
+
 ## Contributing
 
-To date, _Scan to PDF (scan2pdf)_ has only been tested with _Brother_ printers.
+_Scan to PDF (scan2pdf)_ has mainly been tested with _Brother_ printers.
 If you own a printer manufactured by _HP_, _Canon_, _Epson_ or some other
 well-established brand and would like to help with adding support, please
 create an [issue on GitHub](https://github.com/fonic/scan2pdf/issues) and
 provide the output of `scanimage --help`.
+
+
+## Service Menu
+
+To use the _Service Menu_, which provides a _Scan to PDF_ entry in the
+right-click context menu of [KDE](https://kde.org/) file managers
+[Konqueror](https://apps.kde.org/konqueror/) and
+[Dolphin](https://apps.kde.org/dolphin/), simply copy/move `scan2pdf.desktop`
+to `~/.local/share/kio/servicemenus` and make sure `scan2pdf.sh` is stored in
+a location accessible via `PATH`.
+
+Advanced users might want to edit and customize `scan2pdf.desktop` (which is
+an INI-style text file) to their liking (e.g. to change scan sources, color
+modes, scan resolutions, path to `scan2pdf.sh`, etc.).
+
+Screenshot:
+
+![Screenshot](https://raw.githubusercontent.com/fonic/scan2pdf/main/SERVICEMENU.png)
+
 
 ## Command Line Options
 
@@ -64,11 +94,11 @@ Available command line options:
 ```
 Usage: scan2pdf.sh [OPTIONS] OUTFILE
 
-Scan to PDF (scan2pdf) v2.4 (01/15/24)
+Scan to PDF (scan2pdf) v2.5 (01/23/24)
 Scan documents directly to PDF files.
 
 Options:
-  -d, --device STRING       Scanner device ['brother4:net1;dev0']
+  -d, --device STRING       Scanner device ['brother3:net1;dev0']
   -m, --mode STRING         Color mode ['24bit Color']
                             'Black & White',
                             'Gray[Error Diffusion]',
@@ -91,8 +121,12 @@ Options:
 
   -l, --topleftx VALUE      Top left x offset of scan area in mm (0..216) [0]
   -t, --toplefty VALUE      Top left y offset of scan area in mm (0..356) [0]
-  -x, --width VALUE         Width of scan area in mm (0..216) [216]
-  -y, --height VALUE        Height of scan area in mm (0..356) [279]
+  -x, --width VALUE         Width of scan area in mm (0..216) [210]
+  -y, --height VALUE        Height of scan area in mm (0..356) [297]
+
+  -u, --manual-duplex       Perform manual duplex scan: scan odd pages, prompt,
+                            scan even pages, then interleave odd and even pages
+                            to produce combined output
 
   -a, --batch-scan          Scan multiple documents, prompt in between documents
                             (option '-o/--outfile-template' becomes mandatory)
@@ -101,11 +135,13 @@ Options:
                             integer component (e.g. '~/Documents/Scan_%05d.pdf')
 
   -k, --keep-temp           Keep temporary directory on exit
+
   -h, --help                Print usage information
 
 NOTE:
 Strings/values in square brackets show current defaults.
 ```
+
 
 ## Configuration Options
 
@@ -118,7 +154,7 @@ Configuration options and current defaults:
 #  Scan to PDF (scan2pdf)                                                      -
 #                                                                              -
 #  Created by Fonic <https://github.com/fonic>                                 -
-#  Date: 04/17/21 - 01/15/24                                                   -
+#  Date: 04/17/21 - 01/23/24                                                   -
 #                                                                              -
 # ------------------------------------------------------------------------------
 
@@ -215,4 +251,4 @@ TIFF2PDF_OPTS=("-j" "-q" "95")                              # Use JPEG compressi
 
 ##
 
-_Last updated: 01/15/24_
+_Last updated: 01/23/24_

@@ -5,7 +5,7 @@
 #  Scan to PDF (scan2pdf)                                                      -
 #                                                                              -
 #  Created by Fonic <https://github.com/fonic>                                 -
-#  Date: 04/17/21 - 01/15/24                                                   -
+#  Date: 04/17/21 - 01/23/24                                                   -
 #                                                                              -
 #  Inspired by:                                                                -
 #  https://gist.github.com/mludvig/936678                                      -
@@ -21,7 +21,7 @@
 # Check if running Bash and required version (check does not rely on any
 # Bashisms to ensure it works on any POSIX-compliant shell)
 if [ -z "${BASH_VERSION}" ] || [ "${BASH_VERSION%%.*}" -lt 4 ]; then
-	echo "This script requires Bash >= 4.0 to run."
+	echo "Error: this script requires Bash >= v4.0 to run"
 	exit 1
 fi
 
@@ -37,7 +37,7 @@ SCRIPT_FILE="$(basename -- "$0")"
 SCRIPT_PATH="$(realpath -- "$0")"
 SCRIPT_CONF="${SCRIPT_PATH%.*}.conf"
 SCRIPT_TITLE="Scan to PDF (scan2pdf)"
-SCRIPT_VERSION="2.4 (01/15/24)"
+SCRIPT_VERSION="2.5 (01/23/24)"
 
 # Usage information
 # NOTE:
@@ -67,6 +67,10 @@ Scan documents directly to PDF files.
   -x, --width VALUE         Width of scan area in mm (\${WIDTH_MIN}..\${WIDTH_MAX}) [\${WIDTH_DEFAULT}]
   -y, --height VALUE        Height of scan area in mm (\${HEIGHT_MIN}..\${HEIGHT_MAX}) [\${HEIGHT_DEFAULT}]
 
+  -u, --manual-duplex       Perform manual duplex scan: scan odd pages, prompt,
+                            scan even pages, then interleave odd and even pages
+                            to produce combined output
+
   -a, --batch-scan          Scan multiple documents, prompt in between documents
                             (option '-o/--outfile-template' becomes mandatory)
   -o, --outfile-pattern     Interpret OUTFILE argument as printf-style pattern,
@@ -74,6 +78,7 @@ Scan documents directly to PDF files.
                             integer component (e.g. '~/Documents/Scan_%05d.pdf')
 
   -k, --keep-temp           Keep temporary directory on exit
+
   -h, --help                Print usage information
 
 \e[1mNOTE:\e[0m
@@ -84,14 +89,14 @@ Strings/values in square brackets show current defaults."
 USAGE_INDENT=28
 
 # Upper limit for index used to determine next available output file based
-# on output file pattern (100k documents in one folder should be more than
+# on output file pattern (1M documents in one folder should be more than
 # enough)
-MAX_INDEX=99999
+MAX_INDEX=1000000
 
 
 # --------------------------------------
 #                                      -
-#  Default Configuration               -
+#  Configuration and Defaults          -
 #                                      -
 # --------------------------------------
 
@@ -185,6 +190,11 @@ TIFFCP_OPTS=("-c" "lzw")                                    # Use LZW compressio
 #TIFF2PDF_OPTS=("-z")                                       # Use ZIP compression (lossless, higher quality, larger PDF file)
 TIFF2PDF_OPTS=("-j" "-q" "95")                              # Use JPEG compression (quality 95) (lossy, lower quality, smaller PDF file)
 
+# Perform manual duplex scan by default: scan odd pages, prompt, scan
+# even pages, then interleave odd and even pages to produce combined
+# output (string, 'yes'/'no')
+MANUAL_DUPLEX_DEFAULT="no"
+
 # Scan multiple documents, prompt user in between documents by default
 # (string, 'yes'/'no')
 BATCH_SCAN_DEFAULT="no"
@@ -208,21 +218,11 @@ KEEP_TEMP_DEFAULT="no"
 # --------------------------------------
 
 # Print normal/hilite/good/warn/error message [$*: message]
-function printn() {
-	echo -e "$*"
-}
-function printh() {
-	echo -e "\e[1m$*\e[0m"
-}
-function printg() {
-	echo -e "\e[1;32m$*\e[0m"
-}
-function printw() {
-	echo -e "\e[1;33m$*\e[0m"
-}
-function printe() {
-	echo -e "\e[1;31m$*\e[0m"
-}
+function printn() { echo -e "$*"; }
+function printh() { echo -e "\e[1m$*\e[0m"; }
+function printg() { echo -e "\e[1;32m$*\e[0m"; }
+function printw() { echo -e "\e[1;33m$*\e[0m" >&2; }
+function printe() { echo -e "\e[1;31m$*\e[0m" >&2; }
 
 # Print command [$1: command, $2..$n: arguments]
 # NOTE:
@@ -361,7 +361,7 @@ printn
 trap "printn" EXIT
 
 # Initialize settings with defaults
-for item in device mode resolution source brightness contrast topleftx toplefty width height outfile_pattern batch_scan keep_temp; do
+for item in device mode resolution source brightness contrast topleftx toplefty width height outfile_pattern manual_duplex batch_scan keep_temp; do
 	declare -n setvar="${item}"
 	declare -n defvar="${item^^}_DEFAULT"
 	setvar="${defvar}"
@@ -410,6 +410,9 @@ while getopt option; do
 		-y|--height)
 			getarg height || { printe "Error: option '${option}' requires an argument"; result=1; continue; }
 			is_integer "${height}" ${HEIGHT_MIN} ${HEIGHT_MAX} || { printe "Error: invalid height value '${height}'"; result=1; continue; }
+			;;
+		-u|--manual-duplex)
+			manual_duplex="yes"
 			;;
 		-a|--batch-scan)
 			batch_scan="yes"
@@ -471,6 +474,14 @@ printn "Area top left x:         ${topleftx} mm"
 printn "Area top left y:         ${toplefty} mm"
 printn "Area width:              ${width} mm"
 printn "Area height:             ${height} mm"
+printn "Manual duplex:           ${manual_duplex}"
+printn "Batch scan:              ${batch_scan}"
+printn "Keep temp directory:     ${keep_temp}"
+if [[ "${outfile_pattern}" != "yes" ]]; then
+	printn "Output file:             ${outfile}"
+else
+	printn "Output file pattern:     ${outfile}"
+fi
 printn "Scanimage options:       ${SCANIMAGE_OPTS[@]-"(none)"}"
 if is_cmd_avail "convert"; then
 	printn "Convert input options:   ${CONVERT_INPUT_OPTS[@]-"(none)"}"
@@ -479,13 +490,6 @@ else
 	printn "Tiffcp options:          ${TIFFCP_OPTS[@]-"(none)"}"
 	printn "Tiff2pdf options:        ${TIFF2PDF_OPTS[@]-"(none)"}"
 fi
-printn "Batch scan:              ${batch_scan}"
-if [[ "${outfile_pattern}" != "yes" ]]; then
-	printn "Output file:             ${outfile}"
-else
-	printn "Output file pattern:     ${outfile}"
-fi
-printn "Keep temp directory:     ${keep_temp}"
 printn
 
 # Create temporary directory, set up exit trap for cleanup (replaces pre-
@@ -520,30 +524,90 @@ while true; do
 	# contents (using option '-k/--keep-temp')
 	outfile_name="${outfile##*/}"; outfile_name="${outfile_name%.*}"
 
-	# Scan pages (creates one TIFF file per page)
-	# NOTE:
-	# Using file name template '_page_%05d.tiff' ('_page_00001.tiff', '_page_
-	# 00002.tiff', etc.) to maintain correct page order when passing files to
-	# 'tiffcp' using '_page_*.tiff' below
-	printh "Scanning pages..."
-	opts=()
-	opts+=("--device-name=${device}")
-	opts+=("--mode=${mode}")
-	opts+=("--resolution=${resolution}")
-	opts+=("--source=${source}")
-	in_array "${mode}" BRIGHTNESS_MODES && opts+=("--brightness=${brightness}")
-	in_array "${mode}" CONTRAST_MODES && opts+=("--contrast=${contrast}")
-	opts+=("-l" "${topleftx}")
-	opts+=("-t" "${toplefty}")
-	opts+=("-x" "${width}")
-	opts+=("-y" "${height}")
-	opts+=("--format=tiff")
-	opts+=("--batch=${tempdir}/${outfile_name}_page_%05d.tiff")
-	opts+=("${SCANIMAGE_OPTS[@]}")
-	print_cmd "scanimage" "${opts[@]}"
-	scanimage "${opts[@]}" || { printe "Error: call to 'scanimage' failed (exit code: $?), aborting"; result=1; break; }
+	# Perform manual duplex scan?
+	if [[ "${manual_duplex}" == "yes" ]]; then
+		# Scan odd pages (creates one TIFF file per page)
+		# NOTE:
+		# Using file name template '_page_%05d.tiff', starting with index 1
+		# and incrementing by 2 after each page to leave gaps for even pages
+		printh "Scanning odd pages..."
+		opts=()
+		opts+=("--device-name=${device}")
+		opts+=("--mode=${mode}")
+		opts+=("--resolution=${resolution}")
+		opts+=("--source=${source}")
+		in_array "${mode}" BRIGHTNESS_MODES && opts+=("--brightness=${brightness}")
+		in_array "${mode}" CONTRAST_MODES && opts+=("--contrast=${contrast}")
+		opts+=("-l" "${topleftx}")
+		opts+=("-t" "${toplefty}")
+		opts+=("-x" "${width}")
+		opts+=("-y" "${height}")
+		opts+=("--format=tiff")
+		opts+=("--batch=${tempdir}/${outfile_name}_page_%05d.tiff")
+		opts+=("--batch-start=1")
+		opts+=("--batch-increment=2")
+		opts+=("${SCANIMAGE_OPTS[@]}")
+		print_cmd "scanimage" "${opts[@]}"
+		scanimage "${opts[@]}" || { printe "Error: call to 'scanimage' failed (exit code: $?), aborting"; result=1; break; }
 
-	# Prefer using 'convert' (which is able to create PDF file directly from
+		# Prompt user to continue duplex scan with even pages
+		#printn
+		printw "Insert even pages and hit ENTER to continue -or- hit CTRL+D to abort."
+		read -s || break
+		#printn
+
+		# Scan even pages (creates one TIFF file per page)
+		# NOTE:
+		# Using file name template '_page_%05d.tiff', starting with index 2
+		# and incrementing by 2 after each page to fill the gaps in between
+		# odd pages
+		printh "Scanning even pages..."
+		opts=()
+		opts+=("--device-name=${device}")
+		opts+=("--mode=${mode}")
+		opts+=("--resolution=${resolution}")
+		opts+=("--source=${source}")
+		in_array "${mode}" BRIGHTNESS_MODES && opts+=("--brightness=${brightness}")
+		in_array "${mode}" CONTRAST_MODES && opts+=("--contrast=${contrast}")
+		opts+=("-l" "${topleftx}")
+		opts+=("-t" "${toplefty}")
+		opts+=("-x" "${width}")
+		opts+=("-y" "${height}")
+		opts+=("--format=tiff")
+		opts+=("--batch=${tempdir}/${outfile_name}_page_%05d.tiff")
+		opts+=("--batch-start=2")
+		opts+=("--batch-increment=2")
+		opts+=("${SCANIMAGE_OPTS[@]}")
+		print_cmd "scanimage" "${opts[@]}"
+		scanimage "${opts[@]}" || { printe "Error: call to 'scanimage' failed (exit code: $?), aborting"; result=1; break; }
+	else
+		# Scan pages (creates one TIFF file per page)
+		# NOTE:
+		# Using file name template '_page_%05d.tiff' (i.e. '_page_00001.tiff',
+		# '_page_00002.tiff', etc.) to maintain correct page order when passing
+		# files to 'tiffcp' using '_page_*.tiff' below
+		printh "Scanning pages..."
+		opts=()
+		opts+=("--device-name=${device}")
+		opts+=("--mode=${mode}")
+		opts+=("--resolution=${resolution}")
+		opts+=("--source=${source}")
+		in_array "${mode}" BRIGHTNESS_MODES && opts+=("--brightness=${brightness}")
+		in_array "${mode}" CONTRAST_MODES && opts+=("--contrast=${contrast}")
+		opts+=("-l" "${topleftx}")
+		opts+=("-t" "${toplefty}")
+		opts+=("-x" "${width}")
+		opts+=("-y" "${height}")
+		opts+=("--format=tiff")
+		opts+=("--batch=${tempdir}/${outfile_name}_page_%05d.tiff")
+		opts+=("--batch-start=1")
+		opts+=("--batch-increment=1")
+		opts+=("${SCANIMAGE_OPTS[@]}")
+		print_cmd "scanimage" "${opts[@]}"
+		scanimage "${opts[@]}" || { printe "Error: call to 'scanimage' failed (exit code: $?), aborting"; result=1; break; }
+	fi
+
+	# Prefer using 'convert' (which is able to create PDF files directly from
 	# separate TIFF files), fall back to 'tiffcp'/'tiff2pdf' if not available
 	if is_cmd_avail "convert"; then
 		# Create PDF file (from separate TIFF files)
@@ -581,7 +645,7 @@ while true; do
 	# Prompt user to continue batch scan with next document?
 	[[ "${batch_scan}" != "yes" ]] && break
 	printn
-	printw "Prepare next document and hit ENTER to continue -or- hit CTRL+D to exit."
+	printw "Insert next document and hit ENTER to continue -or- hit CTRL+D to exit."
 	read -s || break
 	printn
 

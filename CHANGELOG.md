@@ -1,3 +1,11 @@
+## Changelog for release v2.5
+
+**Changes:**
+- Added option `-u/--manual-duplex` to facilitate scanning double-sided
+  documents with devices that lack hardware support for duplex scanning
+- Added _Service Menu_ for KDE file managers _Konqueror_ and _Dolphin_
+  for convenient one-click scanning to PDF file via context menu entries
+
 ## Changelog for release v2.4
 
 **Changes:**
@@ -67,4 +75,4 @@ Initial release (versions prior to v2.1 have not been published).
 
 ##
 
-_Last updated: 01/15/24_
+_Last updated: 01/23/24_
