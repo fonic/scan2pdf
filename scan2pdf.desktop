@@ -3,7 +3,7 @@
 #  Scan to PDF (scan2pdf) - Service Menu for KDE                               -
 #                                                                              -
 #  Created by Fonic <https://github.com/fonic>                                 -
-#  Date: 01/12/24 - 01/23/24                                                   -
+#  Date: 01/12/24 - 02/18/24                                                   -
 #                                                                              -
 #  NOTE:                                                                       -
 #  Copy/move this file to '~/.local/share/kio/servicemenus' and make           -
@@ -24,40 +24,40 @@ X-KDE-Icon=document-scan
 [Desktop Action scanToPDF1]
 Name=Color 150 dpi
 Icon=color
-Exec=scan2pdf.sh -m "24bit Color" -r 150 -o "%f/scan_%05d.pdf"
+Exec=scan2pdf.sh -m "24bit Color" -r 150 -p "%f/scan_%05d.pdf"
 
 [Desktop Action scanToPDF2]
 Name=Color 200 dpi
 Icon=color
-Exec=scan2pdf.sh -m "24bit Color" -r 200 -o "%f/scan_%05d.pdf"
+Exec=scan2pdf.sh -m "24bit Color" -r 200 -p "%f/scan_%05d.pdf"
 
 [Desktop Action scanToPDF3]
 Name=Color 300 dpi
 Icon=color
-Exec=scan2pdf.sh -m "24bit Color" -r 300 -o "%f/scan_%05d.pdf"
+Exec=scan2pdf.sh -m "24bit Color" -r 300 -p "%f/scan_%05d.pdf"
 
 [Desktop Action scanToPDF4]
 Name=Color 600 dpi
 Icon=color
-Exec=scan2pdf.sh -m "24bit Color" -r 600 -o "%f/scan_%05d.pdf"
+Exec=scan2pdf.sh -m "24bit Color" -r 600 -p "%f/scan_%05d.pdf"
 
 
 [Desktop Action scanToPDF5]
 Name=Grayscale 150 dpi
 Icon=gray-scale
-Exec=scan2pdf.sh -m "True Gray" -r 150 -o "%f/scan_%05d.pdf"
+Exec=scan2pdf.sh -m "True Gray" -r 150 -p "%f/scan_%05d.pdf"
 
 [Desktop Action scanToPDF6]
 Name=Grayscale 200 dpi
 Icon=gray-scale
-Exec=scan2pdf.sh -m "True Gray" -r 200 -o "%f/scan_%05d.pdf"
+Exec=scan2pdf.sh -m "True Gray" -r 200 -p "%f/scan_%05d.pdf"
 
 [Desktop Action scanToPDF7]
 Name=Grayscale 300 dpi
 Icon=gray-scale
-Exec=scan2pdf.sh -m "True Gray" -r 300 -o "%f/scan_%05d.pdf"
+Exec=scan2pdf.sh -m "True Gray" -r 300 -p "%f/scan_%05d.pdf"
 
 [Desktop Action scanToPDF8]
 Name=Grayscale 600 dpi
 Icon=gray-scale
-Exec=scan2pdf.sh -m "True Gray" -r 600 -o "%f/scan_%05d.pdf"
+Exec=scan2pdf.sh -m "True Gray" -r 600 -p "%f/scan_%05d.pdf"
