@@ -94,49 +94,55 @@ Available command line options:
 ```
 Usage: scan2pdf.sh [OPTIONS] OUTFILE
 
-Scan to PDF (scan2pdf) v2.5 (01/23/24)
+Scan to PDF (scan2pdf) v2.6 (02/18/24)
 Scan documents directly to PDF files.
 
 Options:
-  -d, --device STRING       Scanner device ['brother3:net1;dev0']
-  -m, --mode STRING         Color mode ['24bit Color']
-                            'Black & White',
-                            'Gray[Error Diffusion]',
-                            'True Gray',
-                            '24bit Color',
-                            '24bit Color[Fast]'
-  -r, --resolution VALUE    Scan resolution in dpi [300]
-                            100, 150, 200, 300, 400, 600, 1200, 2400, 4800, 9600
-  -s, --source STRING       Scan source ['Automatic Document Feeder(left aligned)']
-                            'FlatBed',
-                            'Automatic Document Feeder(left aligned)',
-                            'Automatic Document Feeder(left aligned,Duplex)',
-                            'Automatic Document Feeder(centrally aligned)',
-                            'Automatic Document Feeder(centrally aligned,Duplex)'
+  -d, --device STRING           Scanner device ['brother3:net1;dev0']
+  -m, --mode STRING             Color mode ['24bit Color']
+                                'Black & White',
+                                'Gray[Error Diffusion]',
+                                'True Gray',
+                                '24bit Color',
+                                '24bit Color[Fast]'
+  -r, --resolution VALUE        Scan resolution in dpi [300]
+                                100, 150, 200, 300, 400, 600, 1200, 2400, 4800, 9600
+  -s, --source STRING           Scan source ['Automatic Document Feeder(left aligned)']
+                                'FlatBed',
+                                'Automatic Document Feeder(left aligned)',
+                                'Automatic Document Feeder(left aligned,Duplex)',
+                                'Automatic Document Feeder(centrally aligned)',
+                                'Automatic Document Feeder(centrally aligned,Duplex)'
 
-  -b, --brightness VALUE    Brightness in percent (-50..50) [0]
-                            (only applied if supported by color mode)
-  -c, --contrast VALUE      Contrast in percent (-50..50) [0]
-                            (only applied if supported by color mode)
+  -b, --brightness VALUE        Brightness in percent (-50..50) [0]
+                                (only applied if supported by color mode)
+  -c, --contrast VALUE          Contrast in percent (-50..50) [0]
+                                (only applied if supported by color mode)
 
-  -l, --topleftx VALUE      Top left x offset of scan area in mm (0..216) [0]
-  -t, --toplefty VALUE      Top left y offset of scan area in mm (0..356) [0]
-  -x, --width VALUE         Width of scan area in mm (0..216) [210]
-  -y, --height VALUE        Height of scan area in mm (0..356) [297]
+  -x, --topleftx VALUE          Top left x offset of scan area in mm (0..216) [0]
+  -y, --toplefty VALUE          Top left y offset of scan area in mm (0..356) [0]
+  -w, --width VALUE             Width of scan area in mm (0..216) [210]
+  -e, --height VALUE            Height of scan area in mm (0..356) [297]
 
-  -u, --manual-duplex       Perform manual duplex scan: scan odd pages, prompt,
-                            scan even pages, then interleave odd and even pages
-                            to produce combined output
+  -u, --manual-duplex           Scan odd pages, prompt, scan even pages, interleave
+                                odd and even pages to produce combined output [no]
 
-  -a, --batch-scan          Scan multiple documents, prompt in between documents
-                            (option '-o/--outfile-template' becomes mandatory)
-  -o, --outfile-pattern     Interpret OUTFILE argument as printf-style pattern,
-                            determine next available output file by incrementing
-                            integer component (e.g. '~/Documents/Scan_%05d.pdf')
+  -a, --batch-mode              Scan multiple documents, prompt in between documents
+                                (makes option '-p/--outfile-pattern' mandatory) [no]
+  -p, --outfile-pattern         Interpret OUTFILE argument as printf-style pattern,
+                                determine next output file by incrementing integer
+                                token (e.g. '~/Documents/Scan_%05d.pdf') [no]
 
-  -k, --keep-temp           Keep temporary directory on exit
+  -i, --initial-prompt          Prompt before first scan operation (e.g. before odd
+                                pages for manual duplex or before first document in
+                                batch mode) [no]
+  -t, --prompt-timeout VALUE    Timeout for prompts in seconds (0 == no timeout) [0]
+                                Allows duplex- and/or batch-scanning without having
+                                to press ENTER to continue when being prompted
 
-  -h, --help                Print usage information
+  -k, --keep-temp               Keep temporary directory on exit [no]
+
+  -h, --help                    Print usage information
 
 NOTE:
 Strings/values in square brackets show current defaults.
@@ -154,7 +160,7 @@ Configuration options and current defaults:
 #  Scan to PDF (scan2pdf)                                                      -
 #                                                                              -
 #  Created by Fonic <https://github.com/fonic>                                 -
-#  Date: 04/17/21 - 01/23/24                                                   -
+#  Date: 04/17/21 - 02/18/24                                                   -
 #                                                                              -
 # ------------------------------------------------------------------------------
 
@@ -231,6 +237,7 @@ HEIGHT_DEFAULT=279                                          # Letter (279.4 mm /
 
 # Options passed to 'scanimage' (array of strings)
 #SCANIMAGE_OPTS=("--progress" "--verbose")                  # Display scan progress, produce verbose output
+#SCANIMAGE_OPTS=("--progress" "--batch-prompt")             # Display scan progress, prompt before each page
 SCANIMAGE_OPTS=("--progress")                               # Display scan progress
 
 # Options passed to 'convert' (array of strings)
@@ -247,8 +254,36 @@ TIFFCP_OPTS=("-c" "lzw")                                    # Use LZW compressio
 # NOTE: only used if 'convert' is not available
 #TIFF2PDF_OPTS=("-z")                                       # Use ZIP compression (lossless, higher quality, larger PDF file)
 TIFF2PDF_OPTS=("-j" "-q" "95")                              # Use JPEG compression (quality 95) (lossy, lower quality, smaller PDF file)
+
+# Manual duplex scan by default: scan odd pages, prompt, scan even
+# pages, interleave odd and even pages to produce combined output
+# (string, 'yes'/'no')
+MANUAL_DUPLEX_DEFAULT="no"
+
+# Batch mode by default: scan multiple documents, prompt in between
+# documents (string, 'yes'/'no')
+BATCH_MODE_DEFAULT="no"
+
+# Interpret OUTFILE command line argument as printf-style pattern by
+# default and determine next output file automatically by incrementing
+# integer token of pattern (string, 'yes'/'no')
+# Example:
+# Pattern '~/Documents/Scan_%05d.pdf' -> '~/Documents/Scan_00001.pdf',
+# '~/Documents/Scan_00002.pdf', '~/Documents/Scan_00003.pdf', ...
+OUTFILE_PATTERN_DEFAULT="no"
+
+# Prompt before first scan operation by default (e.g. before odd pages
+# for manual duplex or before first document in batch mode) (string,
+# 'yes'/'no')
+INITIAL_PROMPT_DEFAULT="no"
+
+# Default timeout for prompts (integer, in seconds; 0 == no timeout)
+PROMPT_TIMEOUT_DEFAULT=0
+
+# Keep temporary directory on exit by default (string, 'yes'/'no')
+KEEP_TEMP_DEFAULT="no"
 ```
 
 ##
 
-_Last updated: 01/23/24_
+_Last updated: 02/18/24_

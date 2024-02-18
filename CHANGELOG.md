@@ -1,3 +1,23 @@
+## Changelog for release v2.6
+
+**Changes:**
+- Added option `-t/--prompt-timeout VALUE` (with `VALUE` in seconds); when
+  specified, user prompts _time out_ after the specified duration, allowing
+  for automatic, time-based continuous scanning (useful for manual duplex
+  and/or batch mode)
+- Added option `-i/--initial-prompt` which issues a user prompt *before* the
+  first scan operation (e.g. before odd pages for manual duplex, before first
+  document in batch mode)
+- Redistributed short options to free up letters for added features (mainly
+  `-t` for `--prompt-TIMEOUT`; additionally, `-p` seemed more fitting for
+  `--outfile-PATTERN`)
+- Renamed option `-a/--batch-scan` to `-a/--batch-mode` (seemed more fitting)
+- Added defaults for *all* command line options to usage information (before,
+  defaults for flags like manual duplex, batch mode, etc. were missing)
+- Added *all* possible configuration items to configuration file (before,
+  flags like manual duplex, batch mode, etc. were omitted)
+- Applied several minor fixes (prints, comments, error messages)
+
 ## Changelog for release v2.5
 
 **Changes:**
@@ -75,4 +95,4 @@ Initial release (versions prior to v2.1 have not been published).
 
 ##
 
-_Last updated: 01/23/24_
+_Last updated: 02/18/24_

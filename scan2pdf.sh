@@ -5,7 +5,7 @@
 #  Scan to PDF (scan2pdf)                                                      -
 #                                                                              -
 #  Created by Fonic <https://github.com/fonic>                                 -
-#  Date: 04/17/21 - 01/23/24                                                   -
+#  Date: 04/17/21 - 02/18/24                                                   -
 #                                                                              -
 #  Inspired by:                                                                -
 #  https://gist.github.com/mludvig/936678                                      -
@@ -37,7 +37,7 @@ SCRIPT_FILE="$(basename -- "$0")"
 SCRIPT_PATH="$(realpath -- "$0")"
 SCRIPT_CONF="${SCRIPT_PATH%.*}.conf"
 SCRIPT_TITLE="Scan to PDF (scan2pdf)"
-SCRIPT_VERSION="2.5 (01/23/24)"
+SCRIPT_VERSION="2.6 (02/18/24)"
 
 # Usage information
 # NOTE:
@@ -49,44 +49,50 @@ USAGE_INFO="\e[1mUsage:\e[0m \${SCRIPT_FILE} [OPTIONS] OUTFILE
 Scan documents directly to PDF files.
 
 \e[1mOptions:\e[0m
-  -d, --device STRING       Scanner device ['\${DEVICE_DEFAULT}']
-  -m, --mode STRING         Color mode ['\${MODE_DEFAULT}']
-                            %{COLOR_MODES}
-  -r, --resolution VALUE    Scan resolution in dpi [\${RESOLUTION_DEFAULT}]
-                            %{SCAN_RESOLUTIONS}
-  -s, --source STRING       Scan source ['\${SOURCE_DEFAULT}']
-                            %{SCAN_SOURCES}
+  -d, --device STRING           Scanner device ['\${DEVICE_DEFAULT}']
+  -m, --mode STRING             Color mode ['\${MODE_DEFAULT}']
+                                %{COLOR_MODES}
+  -r, --resolution VALUE        Scan resolution in dpi [\${RESOLUTION_DEFAULT}]
+                                %{SCAN_RESOLUTIONS}
+  -s, --source STRING           Scan source ['\${SOURCE_DEFAULT}']
+                                %{SCAN_SOURCES}
 
-  -b, --brightness VALUE    Brightness in percent (\${BRIGHTNESS_MIN}..\${BRIGHTNESS_MAX}) [\${BRIGHTNESS_DEFAULT}]
-                            (only applied if supported by color mode)
-  -c, --contrast VALUE      Contrast in percent (\${CONTRAST_MIN}..\${CONTRAST_MAX}) [\${CONTRAST_DEFAULT}]
-                            (only applied if supported by color mode)
+  -b, --brightness VALUE        Brightness in percent (\${BRIGHTNESS_MIN}..\${BRIGHTNESS_MAX}) [\${BRIGHTNESS_DEFAULT}]
+                                (only applied if supported by color mode)
+  -c, --contrast VALUE          Contrast in percent (\${CONTRAST_MIN}..\${CONTRAST_MAX}) [\${CONTRAST_DEFAULT}]
+                                (only applied if supported by color mode)
 
-  -l, --topleftx VALUE      Top left x offset of scan area in mm (\${TOPLEFTX_MIN}..\${TOPLEFTX_MAX}) [\${TOPLEFTX_DEFAULT}]
-  -t, --toplefty VALUE      Top left y offset of scan area in mm (\${TOPLEFTY_MIN}..\${TOPLEFTY_MAX}) [\${TOPLEFTY_DEFAULT}]
-  -x, --width VALUE         Width of scan area in mm (\${WIDTH_MIN}..\${WIDTH_MAX}) [\${WIDTH_DEFAULT}]
-  -y, --height VALUE        Height of scan area in mm (\${HEIGHT_MIN}..\${HEIGHT_MAX}) [\${HEIGHT_DEFAULT}]
+  -x, --topleftx VALUE          Top left x offset of scan area in mm (\${TOPLEFTX_MIN}..\${TOPLEFTX_MAX}) [\${TOPLEFTX_DEFAULT}]
+  -y, --toplefty VALUE          Top left y offset of scan area in mm (\${TOPLEFTY_MIN}..\${TOPLEFTY_MAX}) [\${TOPLEFTY_DEFAULT}]
+  -w, --width VALUE             Width of scan area in mm (\${WIDTH_MIN}..\${WIDTH_MAX}) [\${WIDTH_DEFAULT}]
+  -e, --height VALUE            Height of scan area in mm (\${HEIGHT_MIN}..\${HEIGHT_MAX}) [\${HEIGHT_DEFAULT}]
 
-  -u, --manual-duplex       Perform manual duplex scan: scan odd pages, prompt,
-                            scan even pages, then interleave odd and even pages
-                            to produce combined output
+  -u, --manual-duplex           Scan odd pages, prompt, scan even pages, interleave
+                                odd and even pages to produce combined output [\${MANUAL_DUPLEX_DEFAULT}]
 
-  -a, --batch-scan          Scan multiple documents, prompt in between documents
-                            (option '-o/--outfile-template' becomes mandatory)
-  -o, --outfile-pattern     Interpret OUTFILE argument as printf-style pattern,
-                            determine next available output file by incrementing
-                            integer component (e.g. '~/Documents/Scan_%05d.pdf')
+  -a, --batch-mode              Scan multiple documents, prompt in between documents
+                                (makes option '-p/--outfile-pattern' mandatory) [\${BATCH_MODE_DEFAULT}]
+  -p, --outfile-pattern         Interpret OUTFILE argument as printf-style pattern,
+                                determine next output file by incrementing integer
+                                token (e.g. '~/Documents/Scan_%05d.pdf') [\${OUTFILE_PATTERN_DEFAULT}]
 
-  -k, --keep-temp           Keep temporary directory on exit
+  -i, --initial-prompt          Prompt before first scan operation (e.g. before odd
+                                pages for manual duplex or before first document in
+                                batch mode) [\${INITIAL_PROMPT_DEFAULT}]
+  -t, --prompt-timeout VALUE    Timeout for prompts in seconds (0 == no timeout) [\${PROMPT_TIMEOUT_DEFAULT}]
+                                Allows duplex- and/or batch-scanning without having
+                                to press ENTER to continue when being prompted
 
-  -h, --help                Print usage information
+  -k, --keep-temp               Keep temporary directory on exit [\${KEEP_TEMP_DEFAULT}]
+
+  -h, --help                    Print usage information
 
 \e[1mNOTE:\e[0m
 Strings/values in square brackets show current defaults."
 
 # Indent of option descriptions in usage information (used to properly align
 # dynamically generated contents, i.e. when replacing '%{...}' tokens)
-USAGE_INDENT=28
+USAGE_INDENT=32
 
 # Upper limit for index used to determine next available output file based
 # on output file pattern (1M documents in one folder should be more than
@@ -96,7 +102,7 @@ MAX_INDEX=1000000
 
 # --------------------------------------
 #                                      -
-#  Configuration and Defaults          -
+#  Default Configuration               -
 #                                      -
 # --------------------------------------
 
@@ -173,6 +179,7 @@ HEIGHT_DEFAULT=279                                          # Letter (279.4 mm /
 
 # Options passed to 'scanimage' (array of strings)
 #SCANIMAGE_OPTS=("--progress" "--verbose")                  # Display scan progress, produce verbose output
+#SCANIMAGE_OPTS=("--progress" "--batch-prompt")             # Display scan progress, prompt before each page
 SCANIMAGE_OPTS=("--progress")                               # Display scan progress
 
 # Options passed to 'convert' (array of strings)
@@ -190,22 +197,30 @@ TIFFCP_OPTS=("-c" "lzw")                                    # Use LZW compressio
 #TIFF2PDF_OPTS=("-z")                                       # Use ZIP compression (lossless, higher quality, larger PDF file)
 TIFF2PDF_OPTS=("-j" "-q" "95")                              # Use JPEG compression (quality 95) (lossy, lower quality, smaller PDF file)
 
-# Perform manual duplex scan by default: scan odd pages, prompt, scan
-# even pages, then interleave odd and even pages to produce combined
-# output (string, 'yes'/'no')
+# Manual duplex scan by default: scan odd pages, prompt, scan even
+# pages, interleave odd and even pages to produce combined output
+# (string, 'yes'/'no')
 MANUAL_DUPLEX_DEFAULT="no"
 
-# Scan multiple documents, prompt user in between documents by default
-# (string, 'yes'/'no')
-BATCH_SCAN_DEFAULT="no"
+# Batch mode by default: scan multiple documents, prompt in between
+# documents (string, 'yes'/'no')
+BATCH_MODE_DEFAULT="no"
 
-# Interpret OUTFILE command line argument as printf-style pattern and de-
-# termine next output file automatically by incrementing integer component
-# of pattern by default (string, 'yes'/'no')
+# Interpret OUTFILE command line argument as printf-style pattern by
+# default and determine next output file automatically by incrementing
+# integer token of pattern (string, 'yes'/'no')
 # Example:
 # Pattern '~/Documents/Scan_%05d.pdf' -> '~/Documents/Scan_00001.pdf',
 # '~/Documents/Scan_00002.pdf', '~/Documents/Scan_00003.pdf', ...
 OUTFILE_PATTERN_DEFAULT="no"
+
+# Prompt before first scan operation by default (e.g. before odd pages
+# for manual duplex or before first document in batch mode) (string,
+# 'yes'/'no')
+INITIAL_PROMPT_DEFAULT="no"
+
+# Default timeout for prompts (integer, in seconds; 0 == no timeout)
+PROMPT_TIMEOUT_DEFAULT=0
 
 # Keep temporary directory on exit by default (string, 'yes'/'no')
 KEEP_TEMP_DEFAULT="no"
@@ -250,8 +265,8 @@ function print_cmd() {
 	printn "${output}"
 }
 
-# Print error message and exit [$1: error message, $2: exit code (optional,
-# defaults to 1)]
+# Print error message and exit [$1: error message (optional), $2: exit code
+# (optional, defaults to 1)]
 function die() {
 	set +e; trap - ERR
 	[[ -n "${1+set}" ]] && printe "$1"
@@ -311,6 +326,24 @@ function is_integer() {
 	return 0
 }
 
+# Check if argument is floating point value [$1: argument]
+function is_float() {
+	[[ "$1" =~ ^[0-9]+$ || "$1" =~ ^[0-9]+[.][0-9]+$ ]] && return 0
+	return 1
+}
+
+# Prompt user [$1: prompt message, $2: timeout in seconds (0 == no timeout)]
+# NOTE:
+# read returns 1 for CTRL+D (EOF) and >128 on timeout (according to man pages)
+function prompt_user() {
+	local msg="$1" timeout="$2" opts=("-s") result
+	(( 10#${timeout} > 0 )) && opts+=("-t" "${timeout}")
+	printw "${msg}"
+	read "${opts[@]}" && result=$? || result=$?
+	(( ${result} == 0 || ${result} > 128 )) && return 0
+	return 1
+}
+
 
 # --------------------------------------
 #                                      -
@@ -350,6 +383,7 @@ if (( $# == 0 )) || in_array "-h" _ARGS || in_array "--help" _ARGS; then
 	USAGE_INFO="${USAGE_INFO/"%{SCAN_SOURCES}"/"${sources}"}"
 
 	# Display usage information (with variables expanded) and exit
+	# CAUTION: uses eval (!)
 	eval "printn \"${USAGE_INFO}\""
 	exit 0
 fi
@@ -361,7 +395,7 @@ printn
 trap "printn" EXIT
 
 # Initialize settings with defaults
-for item in device mode resolution source brightness contrast topleftx toplefty width height outfile_pattern manual_duplex batch_scan keep_temp; do
+for item in device mode resolution source brightness contrast topleftx toplefty width height manual_duplex batch_mode outfile_pattern initial_prompt prompt_timeout keep_temp; do
 	declare -n setvar="${item}"
 	declare -n defvar="${item^^}_DEFAULT"
 	setvar="${defvar}"
@@ -395,30 +429,37 @@ while getopt option; do
 			getarg -contrast || { printe "Error: option '${option}' requires an argument"; result=1; continue; }
 			is_integer "${contrast}" ${CONTRAST_MIN} ${CONTRAST_MAX} || { printe "Error: invalid contrast value '${contrast}'"; result=1; continue; }
 			;;
-		-l|--topleftx)
+		-x|--topleftx)
 			getarg topleftx || { printe "Error: option '${option}' requires an argument"; result=1; continue; }
 			is_integer "${topleftx}" ${TOPLEFTX_MIN} ${TOPLEFTX_MAX} || { printe "Error: invalid top left x value '${topleftx}'"; result=1; continue; }
 			;;
-		-t|--toplefty)
+		-y|--toplefty)
 			getarg toplefty || { printe "Error: option '${option}' requires an argument"; result=1; continue; }
 			is_integer "${toplefty}" ${TOPLEFTY_MIN} ${TOPLEFTY_MAX} || { printe "Error: invalid top left y value '${toplefty}'"; result=1; continue; }
 			;;
-		-x|--width)
+		-w|--width)
 			getarg width || { printe "Error: option '${option}' requires an argument"; result=1; continue; }
 			is_integer "${width}" ${WIDTH_MIN} ${WIDTH_MAX} || { printe "Error: invalid width value '${width}'"; result=1; continue; }
 			;;
-		-y|--height)
+		-e|--height)
 			getarg height || { printe "Error: option '${option}' requires an argument"; result=1; continue; }
 			is_integer "${height}" ${HEIGHT_MIN} ${HEIGHT_MAX} || { printe "Error: invalid height value '${height}'"; result=1; continue; }
 			;;
 		-u|--manual-duplex)
 			manual_duplex="yes"
 			;;
-		-a|--batch-scan)
-			batch_scan="yes"
+		-a|--batch-mode)
+			batch_mode="yes"
 			;;
-		-o|--outfile-pattern)
+		-p|--outfile-pattern)
 			outfile_pattern="yes"
+			;;
+		-i|--initial-prompt)
+			initial_prompt="yes"
+			;;
+		-t|--prompt-timeout)
+			getarg prompt_timeout || { printe "Error: option '${option}' requires an argument"; result=1; continue; }
+			is_integer "${prompt_timeout}" || { printe "Error: invalid prompt timeout value '${prompt_timeout}'"; result=1; continue; }
 			;;
 		-k|--keep-temp)
 			keep_temp="yes"
@@ -436,7 +477,7 @@ while getopt option; do
 			;;
 	esac
 done
-[[ "${batch_scan}" == "yes" && "${outfile_pattern}" != "yes" ]] && { printe "Error: option '-a/--batch-scan' requires option '-o/--outfile-pattern'"; result=1; }
+[[ "${batch_mode}" == "yes" && "${outfile_pattern}" != "yes" ]] && { printe "Error: option '-a/--batch-mode' requires option '-p/--outfile-pattern'"; result=1; }
 if [[ "${outfile_pattern}" == "yes" ]]; then
 	if [[ -n "${outfile+set}" ]]; then
 		[[ "${outfile}" =~ %[0-9]*d ]] || { printe "Error: invalid output file pattern '${outfile}' (integer token missing)"; result=1; }
@@ -475,7 +516,9 @@ printn "Area top left y:         ${toplefty} mm"
 printn "Area width:              ${width} mm"
 printn "Area height:             ${height} mm"
 printn "Manual duplex:           ${manual_duplex}"
-printn "Batch scan:              ${batch_scan}"
+printn "Batch mode:              ${batch_mode}"
+printn "Initial prompt:          ${initial_prompt}"
+printn "Prompt timeout:          ${prompt_timeout}"
 printn "Keep temp directory:     ${keep_temp}"
 if [[ "${outfile_pattern}" != "yes" ]]; then
 	printn "Output file:             ${outfile}"
@@ -500,9 +543,35 @@ trap "set +e; trap - ERR; if [[ \"${keep_temp}\" == \"yes\" ]]; then printn; pri
 printn "Path: ${tempdir}"
 printn
 
-# Batch scan loop (only executed ONCE if not batch-scanning)
-result=0; index=0; pattern="${outfile}"
+# --- TESTING mask commands for dry run TESTING ---
+function scanimage() { return 0; }
+function convert()   { return 0; }
+function tiffcp()    { return 0; }
+function tiff2pdf()  { return 0; }
+# --- TESTING mask commands for dry run TESTING ---
+
+# Scan loop (executed only once if not in batch mode)
+result=0; prompt="${initial_prompt}"
+index=0; pattern="${outfile}"
 while true; do
+
+	# Prompt user to insert/prepare next scan item?
+	# Enable prompt for upcoming iterations afterwards
+	if [[ "${prompt}" == "yes" ]]; then
+		if [[ "${manual_duplex}" == "yes" && "${batch_mode}" == "yes" ]]; then
+			prompt_user "Prepare odd pages of next document and hit ENTER to continue (hit CTRL+D to exit)" ${prompt_timeout} || break
+		elif [[ "${manual_duplex}" == "yes" ]]; then
+			prompt_user "Prepare odd pages of document and hit ENTER to continue (hit CTRL+D to exit)" ${prompt_timeout} || break
+			printn
+		elif [[ "${batch_mode}" == "yes" ]]; then
+			prompt_user "Prepare next document and hit ENTER to continue (hit CTRL+D to exit)" ${prompt_timeout} || break
+			printn
+		else
+			prompt_user "Prepare document and hit ENTER to continue (hit CTRL+D to exit)" ${prompt_timeout} || break
+			printn
+		fi
+	fi
+	prompt="yes"
 
 	# Determine next available output file based on output file pattern?
 	if [[ "${outfile_pattern}" == "yes" ]]; then
@@ -512,7 +581,7 @@ while true; do
 			[[ -e "${outfile}" ]] || break
 		done
 		if (( ${index} > ${MAX_INDEX} )) || [[ -e "${outfile}" ]]; then
-			printe "Error: failed to determine next output file (last candidate: ${outfile})"; result=1; break
+			printe "Error: failed to determine next output file (last candidate: ${outfile}), aborting"; result=1; break
 		fi
 		printn "Output file: ${outfile}"
 	fi
@@ -550,11 +619,14 @@ while true; do
 		print_cmd "scanimage" "${opts[@]}"
 		scanimage "${opts[@]}" || { printe "Error: call to 'scanimage' failed (exit code: $?), aborting"; result=1; break; }
 
-		# Prompt user to continue duplex scan with even pages
-		#printn
-		printw "Insert even pages and hit ENTER to continue -or- hit CTRL+D to abort."
-		read -s || break
-		#printn
+		# Prompt user to insert/prepare even pages of document
+		if [[ "${batch_mode}" == "yes" ]]; then
+			prompt_user "Prepare even pages of current document and hit ENTER to continue (hit CTRL+D to exit)" ${prompt_timeout} || break
+		else
+			printn
+			prompt_user "Prepare even pages of document and hit ENTER to continue (hit CTRL+D to exit)" ${prompt_timeout} || break
+			printn
+		fi
 
 		# Scan even pages (creates one TIFF file per page)
 		# NOTE:
@@ -611,7 +683,7 @@ while true; do
 	# separate TIFF files), fall back to 'tiffcp'/'tiff2pdf' if not available
 	if is_cmd_avail "convert"; then
 		# Create PDF file (from separate TIFF files)
-		printh "Creating PDF..."
+		printh "Creating PDF file..."
 		opts=()
 		opts+=("${CONVERT_INPUT_OPTS[@]}")
 		opts+=("${tempdir}/${outfile_name}_page_"*.tiff)
@@ -632,7 +704,7 @@ while true; do
 		tiffcp "${opts[@]}" || { printe "Error: call to 'tiffcp' failed (exit code: $?), aborting"; result=1; break; }
 
 		# Create PDF file (from multipage TIFF file)
-		printh "Creating PDF..."
+		printh "Creating PDF file..."
 		opts=()
 		opts+=("${TIFF2PDF_OPTS[@]}")
 		opts+=("-o" "${outfile}")
@@ -642,11 +714,10 @@ while true; do
 		tiff2pdf "${opts[@]}" || { printe "Error: call to 'tiff2pdf' failed (exit code: $?), aborting"; result=1; break; }
 	fi
 
-	# Prompt user to continue batch scan with next document?
-	[[ "${batch_scan}" != "yes" ]] && break
-	printn
-	printw "Insert next document and hit ENTER to continue -or- hit CTRL+D to exit."
-	read -s || break
+	# Break loop now if not in batch mode
+	[[ "${batch_mode}" != "yes" ]] && break
+
+	# Make some room
 	printn
 
 done
